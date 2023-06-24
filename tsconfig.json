@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "allowSyntheticDefaultImports": true,
+    "noImplicitAny": true,
+    "preserveConstEnums": true,
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationDir": "dist/types",
+    "baseUrl": "."
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

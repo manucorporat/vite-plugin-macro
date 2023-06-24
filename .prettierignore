@@ -1,0 +1,6 @@
+dist
+node_modules
+target
+src/wasm
+pnpm-lock.yaml
+*.d.ts
