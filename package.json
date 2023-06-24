@@ -1,6 +1,6 @@
 {
   "name": "@builder.io/vite-plugin-macro",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "description": "A Vite plugin to enable macro support",
   "author": {
     "name": "Manu Mtz.-Almeida",
@@ -22,6 +22,7 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
       "types": "./dist/types/main.d.ts"
     }
   },

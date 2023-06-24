@@ -30,6 +30,10 @@ export default defineConfig({
           src: "src/wasm/vite_plugin_macro_bg.wasm",
           dest: ".",
         },
+        {
+          src: "src/index.cjs",
+          dest: ".",
+        },
       ],
     }),
   ],

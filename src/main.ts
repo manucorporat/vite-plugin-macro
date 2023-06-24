@@ -27,8 +27,15 @@ export interface MacroOutput {
   removals: MacroRemoveLocation[];
 }
 
+export type MacroFilter = (
+  ident: string,
+  id: string,
+  importer: string
+) => boolean;
+
 export interface MacroPluginOptions {
-  filter?: (ident: string, id: string, importer: string) => boolean;
+  preset?: "pandacss" | undefined;
+  filter?: MacroFilter;
   assertType?: string;
   include?: FilterPattern | undefined;
   exclude?: FilterPattern | undefined;
@@ -47,7 +54,17 @@ export const macroPlugin = async (
     path.join(__dirname, "vite_plugin_macro_bg.wasm")
   );
   const assertType = opts.assertType ?? "";
-  const filter = opts.filter ? opts.filter : () => false;
+  let defaultFilter: MacroFilter = () => false;
+  if (opts.preset === "pandacss") {
+    defaultFilter = (ident, id) => {
+      return (
+        ident === "css" &&
+        id.endsWith("/styled-system/css") &&
+        (id.startsWith(".") || id.startsWith("~"))
+      );
+    };
+  }
+  const filter = opts.filter ? opts.filter : defaultFilter;
   const idFilter = createFilter(
     opts.include,
     opts.exclude ?? [/\bnode_modules\b/],
