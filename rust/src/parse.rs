@@ -15,11 +15,11 @@ use crate::transform::{MacroTransform, TransformOutput};
 pub struct TransformCodeOptions {
     pub absolute_path: String,
     pub code: String,
-    pub assert_macro: Option<String>,
+    pub assert_type: String,
     pub filter: Box<dyn Fn(String, String) -> bool>,
 }
 
-pub fn transform_code(config: TransformCodeOptions) -> PResult<Vec<TransformOutput>> {
+pub fn transform_code(config: TransformCodeOptions) -> PResult<TransformOutput> {
     let source_map = Lrc::new(SourceMap::default());
 
     let (mut main_module, is_type_script, _) = parse(&config, Lrc::clone(&source_map))?;
@@ -38,7 +38,10 @@ pub fn transform_code(config: TransformCodeOptions) -> PResult<Vec<TransformOutp
         let collect = global_collect(&main_module);
         let mut macro_transform = MacroTransform::new(&collect, config);
         main_module.visit_with(&mut macro_transform);
-        Ok(macro_transform.spans)
+        Ok(TransformOutput {
+            replaces: macro_transform.replaces,
+            removals: macro_transform.removals,
+        })
     })
 }
 

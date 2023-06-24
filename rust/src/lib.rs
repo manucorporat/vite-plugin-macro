@@ -17,7 +17,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub fn get_macro_locations(
     code: String,
     filename: String,
-    assert_macro: Option<String>,
+    assert_type: String,
     js_filter: js_sys::Function,
 ) -> Result<JsValue, JsValue> {
     let filter = Box::new(move |name: String, id: String| {
@@ -33,7 +33,7 @@ pub fn get_macro_locations(
     let result = transform_code(TransformCodeOptions {
         absolute_path: filename,
         code,
-        assert_macro,
+        assert_type,
         filter,
     })
     .unwrap();

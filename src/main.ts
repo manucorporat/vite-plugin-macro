@@ -11,15 +11,25 @@ import { ViteNodeServer } from "vite-node/server";
 import { createFilter } from "@rollup/pluginutils";
 import type { FilterPattern } from "@rollup/pluginutils";
 
-export interface MacroLocation {
+export interface MacroReplaceLocation {
   lo: number;
   hi: number;
   import_src: string;
   import_name: string;
 }
 
+export interface MacroRemoveLocation {
+  lo: number;
+  hi: number;
+}
+
+export interface MacroOutput {
+  replaces: MacroReplaceLocation[];
+  removals: MacroRemoveLocation[];
+}
+
 export interface MacroPluginOptions {
-  filter?: (id: string, source: string) => boolean;
+  filter?: (ident: string, id: string, importer: string) => boolean;
   assertType?: string;
   include?: FilterPattern | undefined;
   exclude?: FilterPattern | undefined;
@@ -33,6 +43,7 @@ export const macroPlugin = async (
   const wasmBuffer = await fs.promises.readFile(
     path.join(__dirname, "vite_plugin_macro_bg.wasm")
   );
+  const assertType = opts.assertType ?? "";
   const filter = opts.filter ? opts.filter : () => false;
   const idFilter = createFilter(
     opts.include,
@@ -77,37 +88,41 @@ export const macroPlugin = async (
       const shouldTransform = [".js", ".jsx", ".ts", ".tsx"].includes(
         extension
       );
-      if (shouldTransform) {
-        const value = get_macro_locations(
-          code,
-          id,
-          opts.assertType,
-          filter
-        ) as MacroLocation[];
-        const s = new MagicString(code);
-        for (const macroLocation of value) {
-          const resolved = await this.resolve(macroLocation.import_src, id);
-          if (resolved && resolved.id) {
-            const module = await runner.executeId(resolved.id);
-            const macroFunc = module[macroLocation.import_name];
-            if (macroFunc) {
-              const wrapperStr =
-                "return " + s.slice(macroLocation.lo, macroLocation.hi);
-              const macroWrapper = new Function(
-                macroLocation.import_name,
-                wrapperStr
-              );
-              const result = macroWrapper(macroFunc);
-              s.remove(macroLocation.lo, macroLocation.hi);
-              s.appendLeft(macroLocation.lo, JSON.stringify(result));
-            }
+      if (!shouldTransform) {
+        return;
+      }
+      const value = get_macro_locations(
+        code,
+        id,
+        assertType,
+        (ident: string, source: string) => filter(ident, source, id)
+      ) as MacroOutput;
+      const s = new MagicString(code);
+      for (const macroLocation of value.removals) {
+        s.remove(macroLocation.lo, macroLocation.hi);
+      }
+      for (const macroLocation of value.replaces) {
+        const resolved = await this.resolve(macroLocation.import_src, id);
+        if (resolved && resolved.id) {
+          const module = await runner.executeId(resolved.id);
+          const macroFunc = module[macroLocation.import_name];
+          if (macroFunc) {
+            const wrapperStr =
+              "return " + s.slice(macroLocation.lo, macroLocation.hi);
+            const macroWrapper = new Function(
+              macroLocation.import_name,
+              wrapperStr
+            );
+            const result = macroWrapper(macroFunc);
+            s.remove(macroLocation.lo, macroLocation.hi);
+            s.appendLeft(macroLocation.lo, JSON.stringify(result));
           }
         }
-        return {
-          code: s.toString(),
-          map: s.generateMap({ hires: true }),
-        };
       }
+      return {
+        code: s.toString(),
+        map: s.generateMap({ hires: true }),
+      };
     },
   };
 };

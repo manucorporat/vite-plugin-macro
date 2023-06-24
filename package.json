@@ -1,5 +1,5 @@
 {
-  "name": "vite-plugin-macro",
+  "name": "@builder.io/vite-plugin-macro",
   "version": "0.0.1",
   "description": "A Vite plugin to enable macro support",
   "author": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "pnpm build.rust && pnpm build.vite && pnpm build.types",
-    "build.rust": "wasm-pack build ./rust --out-dir ../src/wasm --target web",
+    "build.rust": "wasm-pack build ./rust --out-dir ../src/wasm --target web --release",
     "build.vite": "vite build",
     "build.types": "tsc --emitDeclarationOnly --declaration",
     "fmt": "prettier --write .",

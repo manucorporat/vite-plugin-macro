@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use swc_common::Spanned;
 use swc_ecmascript::ast;
 use swc_ecmascript::visit::{Visit, VisitWith};
@@ -15,22 +17,36 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct TransformOutput {
+    pub replaces: Vec<TransformReplaces>,
+    pub removals: Vec<TransformRemovals>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TransformReplaces {
     pub lo: u32,
     pub hi: u32,
     pub import_src: String,
     pub import_name: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct TransformRemovals {
+    pub lo: u32,
+    pub hi: u32,
+}
+
 pub struct MacroTransform<'a> {
     macro_ids: Vec<Id>,
-    pub spans: Vec<TransformOutput>,
+    pub replaces: Vec<TransformReplaces>,
+    pub removals: Vec<TransformRemovals>,
     global_collector: &'a GlobalCollect,
 }
 
 impl<'a> MacroTransform<'a> {
     pub fn new(global_collector: &'a GlobalCollect, config: TransformCodeOptions) -> Self {
         let filter = config.filter;
-        let assert_macro = config.assert_macro;
+        let assert_macro = config.assert_type;
+        let mut removals = HashSet::new();
         let macro_ids: Vec<Id> = global_collector
             .imports
             .iter()
@@ -62,13 +78,12 @@ impl<'a> MacroTransform<'a> {
                 } else {
                     None
                 };
-                match (&assert_type, &assert_macro) {
-                    (Some(assert_type), Some(assert_macro)) => {
-                        if assert_type == assert_macro {
-                            return Some(id.clone());
-                        }
+                if let Some(assert_type) = assert_type {
+                    if assert_type == assert_macro {
+                        removals.insert(import.span);
+                        return Some(id.clone());
                     }
-                    _ => {}
+                    return None;
                 }
                 if filter(name.to_string(), import.source.to_string()) {
                     Some(id.clone())
@@ -79,7 +94,14 @@ impl<'a> MacroTransform<'a> {
             .collect();
         Self {
             macro_ids,
-            spans: Vec::new(),
+            replaces: Vec::new(),
+            removals: removals
+                .into_iter()
+                .map(|span| TransformRemovals {
+                    lo: span.lo().0 - 1,
+                    hi: span.hi().0 - 1,
+                })
+                .collect(),
             global_collector,
         }
     }
@@ -95,7 +117,7 @@ impl<'a> Visit for MacroTransform<'a> {
             if self.macro_ids.contains(&id!(ident)) {
                 let span = node.span();
                 let import = self.global_collector.imports.get(&id!(ident)).unwrap();
-                self.spans.push(TransformOutput {
+                self.replaces.push(TransformReplaces {
                     hi: span.hi().0 - 1,
                     lo: span.lo().0 - 1,
                     import_name: import.specifier.to_string(),
