@@ -1,5 +1,4 @@
-import type { Plugin, ViteDevServer } from "vite";
-import { createServer } from "vite";
+import type { Plugin, ViteDevServer, UserConfig } from "vite";
 
 import { get_macro_locations, initSync } from "./wasm/vite_plugin_macro";
 import fs from "node:fs";
@@ -36,6 +35,10 @@ export interface MacroPluginOptions {
   rootDir?: string;
 }
 
+interface Runner {
+  executeId(rawId: string): Promise<any>;
+}
+
 export const macroPlugin = async (
   opts: MacroPluginOptions = {}
 ): Promise<Plugin> => {
@@ -53,26 +56,42 @@ export const macroPlugin = async (
   initSync(wasmBuffer);
   const rootDir = opts.rootDir ? opts.rootDir : process.cwd();
   let server: ViteDevServer | undefined;
-  let runner: ViteNodeRunner;
+  let runner: Runner;
+  let config: Readonly<
+    Omit<UserConfig, "plugins" | "assetsInclude" | "optimizeDeps" | "worker">
+  >;
   return {
     name: "vite-plugin-macro",
     enforce: "pre",
+    configResolved(c) {
+      config = c;
+    },
     configureServer(s) {
       server = s;
     },
-    async buildStart() {
-      const s = server ? server : await createServer();
-      const node = new ViteNodeServer(s);
-      runner = new ViteNodeRunner({
-        root: s.config.root,
-        base: s.config.base,
-        fetchModule(id) {
-          return node.fetchModule(id);
-        },
-        resolveId(id, importer) {
-          return node.resolveId(id, importer);
-        },
-      });
+    buildStart: {
+      sequential: true,
+      async handler() {
+        if (server) {
+          const node = new ViteNodeServer(server);
+          runner = new ViteNodeRunner({
+            root: server.config.root,
+            base: server.config.base,
+            fetchModule(id) {
+              return node.fetchModule(id);
+            },
+            resolveId: (id, importer) => {
+              return node.resolveId(id, importer);
+            },
+          });
+        } else {
+          runner = {
+            async executeId(id) {
+              return import(id);
+            },
+          };
+        }
+      },
     },
     async transform(code, id) {
       if (id.startsWith("\0")) {

@@ -4,6 +4,7 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 export default defineConfig({
   mode: "lib",
   build: {
+    minify: false,
     lib: {
       entry: "src/main.ts",
       formats: ["es"],
