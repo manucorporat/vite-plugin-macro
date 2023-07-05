@@ -46,6 +46,9 @@ interface Runner {
   executeId(rawId: string): Promise<any>;
 }
 
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+
 export const macroPlugin = async (
   opts: MacroPluginOptions = {}
 ): Promise<Plugin> => {
@@ -133,9 +136,13 @@ export const macroPlugin = async (
         assertType,
         (ident: string, source: string) => filter(ident, source, id)
       ) as MacroOutput;
-      const s = new MagicString(code);
+      const s = new MagicString(code, {
+        filename: id,
+      });
+      const codeBuffer = encoder.encode(code);
       for (const macroLocation of value.removals) {
-        s.remove(macroLocation.lo, macroLocation.hi);
+        const {lo, hi} = resolveStrPos(codeBuffer, macroLocation.lo, macroLocation.hi)
+        s.remove(lo, hi);
       }
       for (const macroLocation of value.replaces) {
         const resolved = await this.resolve(macroLocation.import_src, id);
@@ -143,15 +150,16 @@ export const macroPlugin = async (
           const module = await runner.executeId(resolved.id);
           const macroFunc = module[macroLocation.import_name];
           if (macroFunc) {
+            const {lo, hi} = resolveStrPos(codeBuffer, macroLocation.lo, macroLocation.hi)
             const wrapperStr =
-              "return " + s.slice(macroLocation.lo, macroLocation.hi);
+              "return " + s.slice(lo, hi);
             const macroWrapper = new Function(
               macroLocation.import_name,
               wrapperStr
             );
             const result = macroWrapper(macroFunc);
-            s.remove(macroLocation.lo, macroLocation.hi);
-            s.appendLeft(macroLocation.lo, JSON.stringify(result));
+            s.remove(lo, hi);
+            s.appendLeft(lo, JSON.stringify(result));
           }
         }
       }
@@ -162,3 +170,9 @@ export const macroPlugin = async (
     },
   };
 };
+
+const resolveStrPos = (code: Uint8Array, lo: number, hi: number) => {
+  const normalizedLo = decoder.decode(code.slice(0, lo)).length;
+  const normalizedHi = normalizedLo + decoder.decode(code.slice(lo, hi)).length;
+  return { lo: normalizedLo, hi: normalizedHi };
+}
